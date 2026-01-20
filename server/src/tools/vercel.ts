@@ -54,7 +54,7 @@ export const vercelTools = {
           outputDirectory: output_directory,
           framework: framework,
         },
-      });
+      }) as any;
 
       return {
         deployment_id: deployment.id,
@@ -69,14 +69,14 @@ export const vercelTools = {
     description: 'List recent deployments for a project',
     inputSchema: z.object({
       project_name: z.string().optional(),
-      limit: z.number().optional().default(20).min(1).max(100),
+      limit: z.number().min(1).max(100).optional().default(20),
     }),
     handler: async ({ project_name, limit = 20 }: { project_name?: string; limit?: number }) => {
       const endpoint = project_name
         ? `/v6/deployments?projectId=${project_name}&limit=${limit}`
         : `/v6/deployments?limit=${limit}`;
 
-      const data = await vercelRequest(endpoint);
+      const data = await vercelRequest(endpoint) as any;
 
       return {
         deployments: data.deployments.map((d: any) => ({
@@ -97,7 +97,7 @@ export const vercelTools = {
       deployment_id: z.string(),
     }),
     handler: async ({ deployment_id }: { deployment_id: string }) => {
-      const data = await vercelRequest(`/v13/deployments/${deployment_id}`);
+      const data = await vercelRequest(`/v13/deployments/${deployment_id}`) as any;
 
       return {
         deployment_id: data.id,

@@ -9,7 +9,7 @@ export const imageTools = {
     inputSchema: z.object({
       prompt: z.string().min(1).max(1000),
       aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4']).optional().default('1:1'),
-      number_of_images: z.number().optional().default(1).min(1).max(4),
+      number_of_images: z.number().min(1).max(4).optional().default(1),
     }),
     handler: async ({ prompt, aspect_ratio = '1:1', number_of_images = 1 }: any) => {
       const apiKey = await getCredential('gemini');
@@ -37,7 +37,7 @@ export const imageTools = {
         throw new Error(`Gemini API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         prompt,
@@ -87,7 +87,7 @@ export const imageTools = {
         throw new Error(`Gemini API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         prompt,

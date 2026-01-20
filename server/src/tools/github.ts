@@ -48,7 +48,7 @@ export const githubTools = {
         body,
         labels,
         assignees,
-      });
+      }) as any;
 
       return {
         issue_number: data.number,
@@ -76,7 +76,7 @@ export const githubTools = {
         base,
         body,
         draft,
-      });
+      }) as any;
 
       return {
         pr_number: data.number,
@@ -93,7 +93,7 @@ export const githubTools = {
       owner: z.string().optional(),
       repo: z.string().optional(),
       language: z.string().optional(),
-      limit: z.number().optional().default(10).min(1).max(100),
+      limit: z.number().min(1).max(100).optional().default(10),
     }),
     handler: async ({ query, owner, repo, language, limit = 10 }: any) => {
       let searchQuery = query;
@@ -110,7 +110,7 @@ export const githubTools = {
 
       const data = await githubRequest(
         `/search/code?q=${encodeURIComponent(searchQuery)}&per_page=${limit}`
-      );
+      ) as any;
 
       return {
         total_count: data.total_count,
@@ -126,14 +126,14 @@ export const githubTools = {
       owner: z.string().optional().describe('Username or org name (defaults to authenticated user)'),
       type: z.enum(['all', 'owner', 'member']).optional().default('all'),
       sort: z.enum(['created', 'updated', 'pushed', 'full_name']).optional().default('updated'),
-      limit: z.number().optional().default(30).min(1).max(100),
+      limit: z.number().min(1).max(100).optional().default(30),
     }),
     handler: async ({ owner, type = 'all', sort = 'updated', limit = 30 }: any) => {
       const endpoint = owner
         ? `/users/${owner}/repos?type=${type}&sort=${sort}&per_page=${limit}`
         : `/user/repos?type=${type}&sort=${sort}&per_page=${limit}`;
 
-      const data = await githubRequest(endpoint);
+      const data = await githubRequest(endpoint) as any[];
 
       return {
         repositories: data.map((repo: any) => ({

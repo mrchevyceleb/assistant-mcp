@@ -8,7 +8,7 @@ export const searchTools = {
     description: 'Search the web using Brave Search API',
     inputSchema: z.object({
       query: z.string().min(1).max(400),
-      count: z.number().optional().default(10).min(1).max(20),
+      count: z.number().min(1).max(20).optional().default(10),
     }),
     handler: async ({ query, count = 10 }: { query: string; count?: number }) => {
       const apiKey = await getCredential('brave_search');
@@ -28,7 +28,7 @@ export const searchTools = {
         throw new Error(`Brave Search API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         query,
@@ -74,7 +74,7 @@ export const searchTools = {
         throw new Error(`Perplexity API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         query,
@@ -113,7 +113,7 @@ export const searchTools = {
         throw new Error(`Perplexity API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         query,

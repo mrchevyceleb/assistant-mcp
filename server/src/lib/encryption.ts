@@ -67,10 +67,10 @@ export function decrypt(encryptedData: string): string {
 
 // Store credential in database (encrypted)
 export async function storeCredential(service: string, apiKey: string, metadata: Record<string, any> = {}) {
-  const { default: db } = await import('./supabase.js');
+  const { supabase } = await import('./supabase.js');
   const encrypted = encrypt(apiKey);
 
-  const { data, error } = await db.supabase
+  const { data, error } = await supabase
     .from('credentials')
     .upsert({ service, api_key_encrypted: encrypted, metadata })
     .select()
@@ -86,9 +86,9 @@ export async function storeCredential(service: string, apiKey: string, metadata:
 
 // Retrieve credential from database (decrypted)
 export async function getCredential(service: string): Promise<string> {
-  const { default: db } = await import('./supabase.js');
+  const { supabase } = await import('./supabase.js');
 
-  const { data, error } = await db.supabase
+  const { data, error } = await supabase
     .from('credentials')
     .select('api_key_encrypted')
     .eq('service', service)
