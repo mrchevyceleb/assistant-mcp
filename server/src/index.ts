@@ -1,0 +1,188 @@
+#!/usr/bin/env node
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import express from 'express';
+import * as dotenv from 'dotenv';
+import { initSupabase } from './lib/supabase.js';
+import { logger, logToolUsage } from './lib/logger.js';
+import { authMiddleware } from './middleware/auth.js';
+
+// Import all tools
+import { metaTools } from './tools/meta.js';
+import { taskTools } from './tools/tasks.js';
+import { memoryTools } from './tools/memory.js';
+import { searchTools } from './tools/search.js';
+import { imageTools } from './tools/images.js';
+import { githubTools } from './tools/github.js';
+import { vercelTools } from './tools/vercel.js';
+
+// Load environment variables
+dotenv.config();
+
+// Initialize Supabase
+initSupabase();
+
+// Combine all tools
+const allTools = {
+  ...metaTools,
+  ...taskTools,
+  ...memoryTools,
+  ...searchTools,
+  ...imageTools,
+  ...githubTools,
+  ...vercelTools,
+};
+
+// Create MCP server
+const server = new Server(
+  {
+    name: 'matt-assistant-mcp',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// List tools handler
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const tools = Object.entries(allTools).map(([name, tool]) => ({
+    name,
+    description: tool.description,
+    inputSchema: tool.inputSchema.shape || tool.inputSchema,
+  }));
+
+  return { tools };
+});
+
+// Call tool handler
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  const startTime = Date.now();
+  let success = true;
+  let errorMessage: string | undefined;
+
+  try {
+    const tool = allTools[name as keyof typeof allTools];
+
+    if (!tool) {
+      throw new Error(`Unknown tool: ${name}`);
+    }
+
+    // Validate input with Zod
+    const validatedArgs = tool.inputSchema.parse(args);
+
+    // Execute tool
+    const result = await tool.handler(validatedArgs);
+
+    const executionTime = Date.now() - startTime;
+
+    // Log usage
+    const category = getToolCategory(name);
+    logToolUsage(name, category, executionTime, true);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error: any) {
+    success = false;
+    errorMessage = error.message;
+
+    logger.error(`Tool execution error (${name}):`, error);
+
+    const executionTime = Date.now() - startTime;
+    const category = getToolCategory(name);
+    logToolUsage(name, category, executionTime, false, errorMessage);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              error: error.message,
+              tool: name,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// Helper to get tool category from tool name
+function getToolCategory(toolName: string): string {
+  if (toolName.startsWith('list_') || toolName.startsWith('help') || toolName.includes('status') || toolName.includes('capabilities')) {
+    return 'meta';
+  }
+  if (toolName.includes('task')) return 'tasks';
+  if (toolName.includes('memory')) return 'memory';
+  if (toolName.includes('search') || toolName.includes('research')) return 'search';
+  if (toolName.includes('image')) return 'images';
+  if (toolName.includes('issue') || toolName.includes('pr') || toolName.includes('repo')) return 'github';
+  if (toolName.includes('deploy')) return 'deploy';
+  return 'other';
+}
+
+// HTTP server for health check and future OAuth endpoints
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+
+// Health check endpoint (no auth required)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Protected endpoint example (requires auth)
+app.get('/api/status', authMiddleware, (req, res) => {
+  res.json({
+    status: 'authenticated',
+    tools_count: Object.keys(allTools).length,
+  });
+});
+
+// Future OAuth endpoints
+// app.get('/auth/google', ...)
+// app.get('/auth/google/callback', ...)
+
+// Start both servers
+async function main() {
+  // Start HTTP server
+  app.listen(PORT, () => {
+    logger.info(`HTTP server listening on port ${PORT}`);
+    logger.info(`Health check: http://localhost:${PORT}/health`);
+  });
+
+  // Start MCP server on stdio
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  logger.info('MCP server started on stdio');
+  logger.info(`Registered ${Object.keys(allTools).length} tools`);
+}
+
+main().catch((error) => {
+  logger.error('Fatal error:', error);
+  process.exit(1);
+});

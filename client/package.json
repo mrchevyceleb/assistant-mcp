@@ -1,0 +1,27 @@
+{
+  "name": "@mattjohnston/assistant-mcp-client",
+  "version": "1.0.0",
+  "description": "Client for Matt's remote MCP assistant server",
+  "main": "dist/index.js",
+  "bin": {
+    "assistant-mcp-client": "dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "prepublish": "npm run build"
+  },
+  "keywords": ["mcp", "assistant", "client"],
+  "author": "Matt Johnston",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
