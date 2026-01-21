@@ -25,6 +25,7 @@ import { githubTools } from './tools/github.js';
 import { vercelTools } from './tools/vercel.js';
 import { hubspotTools } from './tools/hubspot.js';
 import { n8nTools } from './tools/n8n.js';
+import { calendarTools } from './tools/calendar.js';
 
 // Load environment variables
 dotenv.config();
@@ -43,6 +44,7 @@ const allTools = {
   ...vercelTools,
   ...hubspotTools,
   ...n8nTools,
+  ...calendarTools,
 };
 
 // Create MCP server

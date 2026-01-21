@@ -199,12 +199,12 @@ CREATE INDEX IF NOT EXISTS idx_inbox_processed ON inbox(processed);
 ```bash
 cd server
 npm run dev
-# Server runs on http://localhost:3000
+# Server runs on http://localhost:9001
 ```
 
 ### 5. Access Admin UI
 
-Open http://localhost:3000/admin in your browser.
+Open http://localhost:9001/admin in your browser.
 
 Login with your `MCP_AUTH_TOKEN` from the `.env` file.
 
@@ -295,7 +295,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 ENCRYPTION_KEY=your-secure-encryption-key-here
 MCP_AUTH_TOKEN=mcp_live_your_token_here
-MCP_SERVER_URL=http://localhost:3000
+MCP_SERVER_URL=http://localhost:9001
 ```
 
 ---
@@ -317,7 +317,7 @@ cd admin-ui
 npm install
 npm run dev
 # Opens on http://localhost:5173
-# Proxies API requests to http://localhost:3000
+# Proxies API requests to http://localhost:9001
 ```
 
 ### Production Build
@@ -474,7 +474,7 @@ For true cross-computer access without running locally:
 
 ```bash
 # Check server is running
-curl http://localhost:3000/health
+curl http://localhost:9001/health
 
 # Check CLI environment
 cat cli/.env
@@ -484,7 +484,7 @@ cat cli/.env
 
 1. Ensure `MCP_AUTH_TOKEN` in `.env` matches what you enter
 2. Check browser console for errors
-3. Verify server is running: `curl http://localhost:3000/health`
+3. Verify server is running: `curl http://localhost:9001/health`
 
 ### MCP not appearing in Claude Code
 
