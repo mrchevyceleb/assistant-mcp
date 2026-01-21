@@ -7,10 +7,12 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
+import cors from 'cors';
 import * as dotenv from 'dotenv';
 import { initSupabase } from './lib/supabase.js';
 import { logger, logToolUsage } from './lib/logger.js';
 import { authMiddleware } from './middleware/auth.js';
+import adminRouter from './routes/admin.js';
 
 // Import all tools
 import { metaTools } from './tools/meta.js';
@@ -139,10 +141,15 @@ function getToolCategory(toolName: string): string {
   return 'other';
 }
 
-// HTTP server for health check and future OAuth endpoints
+// HTTP server for health check, admin API, and future OAuth endpoints
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+}));
 app.use(express.json());
 
 // Health check endpoint (no auth required)
@@ -151,7 +158,57 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    tools: {
+      total: Object.keys(allTools).length,
+      categories: ['meta', 'tasks', 'memory', 'search', 'images', 'github', 'deploy'],
+    },
   });
+});
+
+// Tools listing endpoint (for CLI)
+app.get('/tools', authMiddleware, (req, res) => {
+  const tools = Object.entries(allTools).map(([name, tool]) => {
+    const schema = tool.inputSchema as any;
+    const shape = schema.shape || {};
+    return {
+      name,
+      description: tool.description,
+      category: getToolCategory(name),
+      inputSchema: {
+        required: Object.keys(shape).filter(
+          (key) => !shape[key]?.isOptional?.()
+        ),
+        properties: Object.keys(shape),
+      },
+    };
+  });
+
+  res.json({ tools });
+});
+
+// Tool call endpoint (for CLI testing)
+app.post('/tools/call', authMiddleware, async (req, res) => {
+  const { name, arguments: args } = req.body;
+
+  try {
+    const tool = allTools[name as keyof typeof allTools];
+
+    if (!tool) {
+      return res.status(404).json({ error: `Unknown tool: ${name}` });
+    }
+
+    const validatedArgs = tool.inputSchema.parse(args || {});
+    const result = await tool.handler(validatedArgs);
+
+    res.json({
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message,
+      tool: name,
+    });
+  }
 });
 
 // Protected endpoint example (requires auth)
@@ -161,6 +218,12 @@ app.get('/api/status', authMiddleware, (req, res) => {
     tools_count: Object.keys(allTools).length,
   });
 });
+
+// Admin API routes
+app.use('/admin/api', adminRouter);
+
+// Static files for admin UI (will be built into public/admin)
+app.use('/admin', express.static('public/admin'));
 
 // Future OAuth endpoints
 // app.get('/auth/google', ...)
