@@ -44,7 +44,7 @@ In Railway dashboard, go to Variables and add:
 
 ```bash
 # Server
-PORT=3000
+PORT=9001
 NODE_ENV=production
 MCP_AUTH_TOKEN=mcp_live_$(openssl rand -hex 32)
 

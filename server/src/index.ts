@@ -9,6 +9,7 @@ import {
 import express from 'express';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { initSupabase } from './lib/supabase.js';
 import { logger, logToolUsage } from './lib/logger.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -22,6 +23,8 @@ import { searchTools } from './tools/search.js';
 import { imageTools } from './tools/images.js';
 import { githubTools } from './tools/github.js';
 import { vercelTools } from './tools/vercel.js';
+import { hubspotTools } from './tools/hubspot.js';
+import { n8nTools } from './tools/n8n.js';
 
 // Load environment variables
 dotenv.config();
@@ -38,6 +41,8 @@ const allTools = {
   ...imageTools,
   ...githubTools,
   ...vercelTools,
+  ...hubspotTools,
+  ...n8nTools,
 };
 
 // Create MCP server
@@ -58,7 +63,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = Object.entries(allTools).map(([name, tool]) => ({
     name,
     description: tool.description,
-    inputSchema: tool.inputSchema.shape || tool.inputSchema,
+    inputSchema: zodToJsonSchema(tool.inputSchema as any, { target: 'jsonSchema7' }),
   }));
 
   return { tools };
@@ -143,7 +148,7 @@ function getToolCategory(toolName: string): string {
 
 // HTTP server for health check, admin API, and future OAuth endpoints
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 9001;
 
 // Middleware
 app.use(cors({
