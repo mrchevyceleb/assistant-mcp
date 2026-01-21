@@ -33,15 +33,14 @@ if (process.env.NODE_ENV === 'production') {
   );
 }
 
-export async function logToolUsage(
+export function logToolUsage(
   toolName: string,
   category: string,
   executionTimeMs: number,
   success: boolean,
   errorMessage?: string
 ) {
-  // Dynamic import to avoid circular dependency
-  const { supabase } = await import('./supabase.js');
+  const { supabase } = require('./supabase.js');
 
   supabase
     .from('tool_usage')
