@@ -2,23 +2,57 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from './logger.js';
 
 export let supabase: SupabaseClient;
+export let supabaseReady = false;
 
-export function initSupabase() {
+export async function initSupabase(): Promise<boolean> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+    logger.warn('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY - running in degraded mode (no database)');
+    return false;
   }
 
-  supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-  logger.info('Supabase client initialized');
+    // Test connection with retry logic
+    const maxRetries = 3;
+    let retries = 0;
+    let connected = false;
+
+    while (retries < maxRetries && !connected) {
+      try {
+        const { error } = await supabase.from('tasks').select('count').limit(1);
+        if (!error) {
+          connected = true;
+          supabaseReady = true;
+          logger.info('Supabase client initialized and connected');
+          return true;
+        }
+        logger.warn(`Supabase connection attempt ${retries + 1} failed:`, error);
+      } catch (err: any) {
+        logger.warn(`Supabase connection attempt ${retries + 1} error:`, err.message);
+      }
+      
+      retries++;
+      if (retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Exponential backoff
+      }
+    }
+
+    logger.error('Failed to connect to Supabase after retries - running in degraded mode');
+    return false;
+
+  } catch (error: any) {
+    logger.error('Failed to initialize Supabase client:', error);
+    return false;
+  }
 }
 
 // Type definitions for database tables

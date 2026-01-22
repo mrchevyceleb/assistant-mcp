@@ -1,0 +1,8 @@
+#!/bin/bash
+export SUPABASE_URL="https://iycloielqcjnjqddeuet.supabase.co"
+export SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Y2xvaWVscWNqbmpxZGRldWV0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODk0MjM2OCwiZXhwIjoyMDg0NTE4MzY4fQ.OLKM6fFXeX1GO4NNEzGnxa7yDhRWf_YggX6_AP8rs4k"
+export ENCRYPTION_KEY="797562d23cd9ba7bb992e9fe055fd148972f117d847e82d32c4bce6097b7dada"
+export MCP_AUTH_TOKEN="mcp_live_e2698dcd3d505f42321cbb516a81577a46cf0115c885fbf57fc83c5ba74b171a"
+export NODE_ENV="production"
+
+node /Users/mjohnst/Library/CloudStorage/OneDrive-Personal/Documents/ASSISTANT-HUB/Assistant/assistant-mcp/server/dist/index.js
