@@ -189,7 +189,9 @@ function getToolCategory(toolName: string): string {
 
 // HTTP server for health check, admin API, and future OAuth endpoints
 const app = express();
-const PORT = process.env.PORT || 9001;
+const BASE_PORT = parseInt(process.env.PORT || '9001', 10);
+const MAX_PORT_ATTEMPTS = 10;
+let activePort: number | null = null;
 
 // Middleware
 app.use(cors({
@@ -204,6 +206,7 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    port: activePort,
     database: supabaseReady ? 'connected' : 'degraded',
     tools: {
       total: Object.keys(allTools).length,
@@ -278,6 +281,43 @@ app.use('/admin/api', adminRouter);
 // Static files for admin UI (will be built into public/admin)
 app.use('/admin', express.static('public/admin'));
 
+// Try to start HTTP server on a port, with auto-retry on conflict
+function tryListenOnPort(port: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    const server = app.listen(port, () => {
+      resolve(port);
+    }).on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(null); // Port in use, try next
+      } else {
+        logger.error(`HTTP server error on port ${port}:`, err.message);
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function startHttpServer(): Promise<void> {
+  for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
+    const port = BASE_PORT + attempt;
+    logger.info(`Trying HTTP server on port ${port}...`);
+    
+    const result = await tryListenOnPort(port);
+    if (result !== null) {
+      activePort = result;
+      logger.info(`✓ HTTP server listening on port ${activePort}`);
+      logger.info(`  Health check: http://localhost:${activePort}/health`);
+      logger.info(`  Admin UI: http://localhost:${activePort}/admin`);
+      return;
+    }
+    
+    logger.warn(`Port ${port} in use, trying next...`);
+  }
+  
+  logger.warn(`Could not find available port after ${MAX_PORT_ATTEMPTS} attempts (tried ${BASE_PORT}-${BASE_PORT + MAX_PORT_ATTEMPTS - 1})`);
+  logger.warn('MCP server continues running (HTTP admin UI disabled)');
+}
+
 // Start both servers
 async function main() {
   try {
@@ -312,15 +352,8 @@ async function main() {
     logger.info(`✓ Registered ${Object.keys(allTools).length} tools`);
     logger.info(`✓ Database: ${supabaseReady ? 'connected' : 'degraded mode (file-based fallback)'}`);
 
-    // Step 5: Start HTTP server AFTER MCP is ready (non-blocking, optional)
-    app.listen(PORT, () => {
-      logger.info(`✓ HTTP server listening on port ${PORT}`);
-      logger.info(`  Health check: http://localhost:${PORT}/health`);
-      logger.info(`  Admin UI: http://localhost:${PORT}/admin`);
-    }).on('error', (err: any) => {
-      logger.warn(`HTTP server failed to start: ${err.message}`);
-      logger.warn('MCP server continues running (HTTP admin UI disabled)');
-    });
+    // Step 5: Start HTTP server with auto-port retry (non-blocking, optional)
+    await startHttpServer();
 
   } catch (error: any) {
     logger.error('Fatal startup error:', error);
