@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "npm run build && node dist/index.js",
+    "start": "tsx src/index.ts",
+    "start:compiled": "npm run build && node dist/index.js",
     "start:quick": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.js"

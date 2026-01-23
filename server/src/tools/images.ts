@@ -3,8 +3,8 @@ import { registerTool } from './meta.js';
 import { getCredential } from '../lib/encryption.js';
 import { logger } from '../lib/logger.js';
 
-// Gemini 3 Pro Image Preview - the recommended model for image generation
-const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+// Gemini 2.0 Flash with image generation capabilities
+const IMAGE_MODEL = 'gemini-2.0-flash-exp';
 
 export const imageTools = {
   generate_image: {

@@ -1,256 +1,163 @@
 # How to Add New Integrations to assistant-mcp
 
-**Purpose:** Reference for Claude Code to add new API integrations quickly.
+Quick reference for adding new API integrations.
 
----
+## Overview
 
-## Quick Summary
+To add a new integration (e.g., Slack):
 
-To add a new integration (e.g., Notion):
+1. Create tool file: `server/src/tools/slack.ts`
+2. Register in: `server/src/index.ts` (add to `toolModules` array)
+3. Store API key in Supabase
+4. Restart Claude Code
 
-1. Create tool file: `assistant-mcp/server/src/tools/notion.ts`
-2. Add import to: `assistant-mcp/server/src/index.ts`
-3. Store API key in Supabase using the store-credentials script
-4. **Restart OpenCode** (auto-rebuilds on start via `npm start`)
+Time: ~5-10 minutes per integration.
 
-That's it. ~5 minutes per integration.
+## Step 1: Create the Tool File
 
-**Important:** You MUST restart OpenCode after code changes. Node.js caches modules in memory, so the running MCP process won't see changes until restarted.
-
----
-
-## Step-by-Step Process
-
-### Step 1: Create the Tool File
-
-Create `assistant-mcp/server/src/tools/{service}.ts`
-
-Use this template:
+Create `server/src/tools/{service}.ts`:
 
 ```typescript
 import { z } from 'zod';
+import { registerTool } from './meta.js';
 import { getCredential } from '../lib/encryption.js';
 import { logger } from '../lib/logger.js';
 
-// =============================================================================
-// {SERVICE_NAME} Tools
-// =============================================================================
-
 // Helper to get API key
 async function getApiKey(): Promise<string> {
-  const key = await getCredential('{service_name}');
+  const key = await getCredential('slack'); // Use lowercase service name
   if (!key) {
-    throw new Error('{SERVICE_NAME} API key not configured. Store it with service name "{service_name}"');
+    throw new Error('Slack API key not configured. Store it with service name "slack"');
   }
   return key;
 }
 
-// Tool definitions
-export const {service}Tools = {
-  // List/Get tool
-  {service}_list_{resource}: {
-    description: 'List all {resources} from {Service}',
+// Export must be named {service}Tools (e.g., slackTools)
+export const slackTools = {
+  slack_list_channels: {
+    description: 'List all Slack channels',
     inputSchema: z.object({
-      limit: z.number().optional().describe('Max results to return'),
+      limit: z.number().optional().default(100).describe('Max channels to return'),
     }),
-    handler: async (args: { limit?: number }) => {
-      const apiKey = await getApiKey();
+    handler: async ({ limit = 100 }: { limit?: number }) => {
+      const token = await getApiKey();
       
-      const response = await fetch('https://api.{service}.com/v1/{resources}', {
+      const response = await fetch('https://slack.com/api/conversations.list', {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
 
       if (!response.ok) {
-        throw new Error(`{Service} API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Slack API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
+      
+      if (!data.ok) {
+        throw new Error(`Slack error: ${data.error}`);
+      }
+
       return {
-        success: true,
-        {resources}: data.results || data,
-        count: data.results?.length || data.length,
+        channels: data.channels?.slice(0, limit) || [],
+        count: Math.min(data.channels?.length || 0, limit),
       };
     },
   },
 
-  // Get single item tool
-  {service}_get_{resource}: {
-    description: 'Get a specific {resource} by ID',
+  slack_send_message: {
+    description: 'Send a message to a Slack channel',
     inputSchema: z.object({
-      id: z.string().describe('The {resource} ID'),
+      channel: z.string().describe('Channel ID or name'),
+      text: z.string().describe('Message text'),
     }),
-    handler: async (args: { id: string }) => {
-      const apiKey = await getApiKey();
+    handler: async ({ channel, text }: { channel: string; text: string }) => {
+      const token = await getApiKey();
       
-      const response = await fetch(`https://api.{service}.com/v1/{resources}/${args.id}`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`{Service} API error: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    },
-  },
-
-  // Create tool
-  {service}_create_{resource}: {
-    description: 'Create a new {resource}',
-    inputSchema: z.object({
-      name: z.string().describe('Name of the {resource}'),
-      // Add other required fields
-    }),
-    handler: async (args: { name: string }) => {
-      const apiKey = await getApiKey();
-      
-      const response = await fetch('https://api.{service}.com/v1/{resources}', {
+      const response = await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(args),
+        body: JSON.stringify({ channel, text }),
       });
 
-      if (!response.ok) {
-        throw new Error(`{Service} API error: ${response.status} ${response.statusText}`);
+      const data = await response.json() as any;
+      
+      if (!data.ok) {
+        throw new Error(`Slack error: ${data.error}`);
       }
 
       return {
         success: true,
-        {resource}: await response.json(),
+        message_ts: data.ts,
+        channel: data.channel,
       };
     },
   },
 };
+
+// Register tools for discoverability (optional but recommended)
+registerTool('slack_list_channels', 'slack', slackTools.slack_list_channels.description, slackTools.slack_list_channels.inputSchema);
+registerTool('slack_send_message', 'slack', slackTools.slack_send_message.description, slackTools.slack_send_message.inputSchema);
 ```
 
-### Step 2: Add Import to index.ts
+## Step 2: Register in index.ts
 
-Edit `assistant-mcp/server/src/index.ts`:
+Edit `server/src/index.ts` and add to the `toolModules` array:
 
 ```typescript
-// Find the imports section (around line 10-20)
-import { {service}Tools } from './tools/{service}.js';
-
-// Find where tools are registered (around line 80-100)
-// Add to the allTools object:
-const allTools = {
-  ...metaTools,
-  ...taskTools,
-  ...memoryTools,
-  ...searchTools,
-  ...imageTools,
-  ...githubTools,
-  ...vercelTools,
-  ...hubspotTools,
-  ...n8nTools,
-  ...{service}Tools,  // <-- ADD THIS LINE
-};
+// Find this array (around line 48-60)
+const toolModules = [
+  { name: 'meta', path: './tools/meta.js' },
+  { name: 'tasks', path: './tools/tasks.js' },
+  { name: 'memory', path: './tools/memory.js' },
+  { name: 'search', path: './tools/search.js' },
+  { name: 'images', path: './tools/images.js' },
+  { name: 'github', path: './tools/github.js' },
+  { name: 'vercel', path: './tools/vercel.js' },
+  { name: 'hubspot', path: './tools/hubspot.js' },
+  { name: 'n8n', path: './tools/n8n.js' },
+  { name: 'calendar', path: './tools/calendar.js' },
+  { name: 'monday', path: './tools/monday.js' },
+  { name: 'slack', path: './tools/slack.js' },  // <-- ADD THIS
+];
 ```
 
-### Step 3: Store the API Key
+**Important:** The `name` field is used to find the export. The loader looks for `{name}Tools` (e.g., `slackTools`).
 
-Option A - Use the script:
+## Step 3: Store API Key
+
+Option A - Use the existing script:
 ```bash
-cd assistant-mcp/server
-npx ts-node scripts/store-credentials.ts
-# Then add the new service to the script first
+cd server
+npx tsx scripts/store-credentials.ts
 ```
 
-Option B - Direct Supabase insert (easier for one-off):
+Option B - Direct code (one-time):
 ```typescript
-// Run this once in a temporary script or Node REPL
 import { storeCredential } from './src/lib/encryption.js';
-await storeCredential('{service_name}', 'your-api-key-here', { 
-  description: '{Service} API key',
-  addedBy: 'claude',
-  addedDate: new Date().toISOString()
-});
+await storeCredential('slack', 'xoxb-your-slack-token');
 ```
 
-Option C - Ask Matt for the API key, then use the existing store-credentials.ts script (edit it to include the new service).
+Option C - Via Supabase dashboard:
+Insert into `credentials` table (but encryption is complex - use Option A or B).
 
-### Step 4: Rebuild
+## Step 4: Restart Claude Code
 
-```bash
-cd assistant-mcp/server
-npm run build
-```
+Close and reopen Claude Code. The new tools will be available.
 
-### Step 5: Test
+## Naming Conventions
 
-Restart OpenCode and test:
-```
-opencode mcp list  # Verify connected
-# Then in chat: "List my {resources} from {Service}"
-```
-
----
-
-## File Locations Reference
-
-```
-assistant-mcp/
-├── server/
-│   ├── src/
-│   │   ├── index.ts              # Main entry - ADD IMPORTS HERE
-│   │   ├── tools/
-│   │   │   ├── meta.ts           # help, list_capabilities, server_status
-│   │   │   ├── tasks.ts          # Task management (8 tools)
-│   │   │   ├── memory.ts         # Memory/persistence (4 tools)
-│   │   │   ├── search.ts         # Brave, Perplexity (3 tools)
-│   │   │   ├── images.ts         # Gemini image gen (2 tools)
-│   │   │   ├── github.ts         # GitHub API (4 tools)
-│   │   │   ├── vercel.ts         # Vercel deployments (3 tools)
-│   │   │   ├── hubspot.ts        # HubSpot CRM (7 tools)
-│   │   │   ├── n8n.ts            # n8n workflows (6 tools)
-│   │   │   └── {new}.ts          # <-- NEW INTEGRATIONS GO HERE
-│   │   ├── lib/
-│   │   │   ├── encryption.ts     # getCredential(), storeCredential()
-│   │   │   ├── supabase.ts       # Supabase client
-│   │   │   └── logger.ts         # Logging utility
-│   │   └── routes/
-│   │       └── admin.ts          # Admin API (for future UI)
-│   ├── scripts/
-│   │   └── store-credentials.ts  # Bulk credential storage
-│   ├── dist/                     # Compiled output (run npm run build)
-│   └── package.json
-├── admin-ui/                     # React admin dashboard (not deployed yet)
-├── SETUP-BLUEPRINT.md            # Setup guide for other computers
-├── OPENCODE-SETUP-GUIDE.md       # Detailed setup documentation
-└── ADD-INTEGRATION-GUIDE.md      # THIS FILE
-```
-
----
-
-## Credentials Stored in Supabase
-
-Current credentials (service names):
-- `brave_search` - Brave Search API
-- `perplexity` - Perplexity API  
-- `gemini` - Google Gemini API
-- `github` - GitHub Personal Access Token
-- `vercel` - Vercel API Token
-- `hubspot` - HubSpot API Key
-- `n8n` - n8n API Key
-
-To add a new one, use the exact service name in both:
-1. `storeCredential('{service_name}', 'key')` 
-2. `getCredential('{service_name}')` in your tool file
-
----
+- **Service name:** lowercase, single word (e.g., `slack`, `notion`, `linear`)
+- **Tool names:** `{service}_{action}_{resource}` (e.g., `slack_send_message`, `notion_list_databases`)
+- **Export name:** `{service}Tools` (e.g., `slackTools`)
 
 ## Common API Patterns
 
-### Bearer Token Auth (most common)
+### Bearer Token (most common)
 ```typescript
 headers: {
   'Authorization': `Bearer ${apiKey}`,
@@ -269,8 +176,7 @@ headers: {
 ### Basic Auth
 ```typescript
 headers: {
-  'Authorization': `Basic ${Buffer.from(`${username}:${apiKey}`).toString('base64')}`,
-  'Content-Type': 'application/json',
+  'Authorization': `Basic ${Buffer.from(`${user}:${apiKey}`).toString('base64')}`,
 }
 ```
 
@@ -279,99 +185,38 @@ headers: {
 const url = `https://api.service.com/endpoint?api_key=${apiKey}`;
 ```
 
----
+## Current Credentials (as of Jan 2026)
 
-## Example: Adding Notion Integration
+| Service | Description |
+|---------|-------------|
+| `brave_search` | Brave Search API |
+| `perplexity` | Perplexity API |
+| `gemini` | Google Gemini API |
+| `github` | GitHub PAT |
+| `vercel` | Vercel API Token |
+| `hubspot` | HubSpot API Key |
+| `monday` | Monday.com API Token |
+| `n8n` | n8n API Key |
 
-1. **Create** `assistant-mcp/server/src/tools/notion.ts`:
+## Checklist
 
-```typescript
-import { z } from 'zod';
-import { getCredential } from '../lib/encryption.js';
+- [ ] Created `tools/{service}.ts` with export `{service}Tools`
+- [ ] Added to `toolModules` array in `index.ts`
+- [ ] Stored API key with `storeCredential('{service}', 'key')`
+- [ ] Restarted Claude Code
+- [ ] Tested tools with `list_capabilities` and actual usage
 
-async function getApiKey(): Promise<string> {
-  const key = await getCredential('notion');
-  if (!key) throw new Error('Notion API key not configured');
-  return key;
-}
+## Troubleshooting
 
-export const notionTools = {
-  notion_search: {
-    description: 'Search Notion pages and databases',
-    inputSchema: z.object({
-      query: z.string().describe('Search query'),
-    }),
-    handler: async (args: { query: string }) => {
-      const apiKey = await getApiKey();
-      const response = await fetch('https://api.notion.com/v1/search', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Notion-Version': '2022-06-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: args.query }),
-      });
-      if (!response.ok) throw new Error(`Notion error: ${response.status}`);
-      return await response.json();
-    },
-  },
+### "Unknown tool" error
+- Check the export name matches `{name}Tools` pattern
+- Check the tool is in the `toolModules` array
+- Check for TypeScript errors: `npm run build`
 
-  notion_list_databases: {
-    description: 'List all Notion databases',
-    inputSchema: z.object({}),
-    handler: async () => {
-      const apiKey = await getApiKey();
-      const response = await fetch('https://api.notion.com/v1/search', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Notion-Version': '2022-06-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ filter: { property: 'object', value: 'database' } }),
-      });
-      if (!response.ok) throw new Error(`Notion error: ${response.status}`);
-      return await response.json();
-    },
-  },
-};
-```
+### "Credential not found" error
+- Verify credential stored with exact service name
+- Check Supabase `credentials` table has the entry
 
-2. **Edit** `index.ts`:
-```typescript
-import { notionTools } from './tools/notion.js';
-// ... 
-const allTools = { ...existingTools, ...notionTools };
-```
-
-3. **Store credential**:
-```bash
-# Add to store-credentials.ts then run, OR use Supabase directly
-```
-
-4. **Build**:
-```bash
-npm run build
-```
-
----
-
-## Checklist for New Integration
-
-- [ ] Created `tools/{service}.ts` with proper imports
-- [ ] Added export to `index.ts`
-- [ ] Stored API key in Supabase with correct service name
-- [ ] Ran `npm run build`
-- [ ] Tested with `opencode mcp list`
-- [ ] Tested actual tool functionality
-
----
-
-## Notes
-
-- Tool names should be `{service}_{action}_{resource}` (e.g., `notion_list_databases`)
-- Always use `getCredential()` - never hardcode API keys
-- The `z` (Zod) schema defines what parameters the tool accepts
-- Handler must return a JSON-serializable object
-- Errors thrown in handlers are caught and returned to the AI gracefully
+### Tools don't appear after changes
+- Restart Claude Code (required for new files)
+- Check server logs for loading errors

@@ -1,262 +1,255 @@
 # Deployment Guide
 
-This guide walks through deploying the MCP server to Railway and configuring it for use.
+This guide covers deploying assistant-mcp for use with Claude Code.
 
-## Prerequisites
+## Local Development (Default)
 
-- [ ] GitHub account
-- [ ] Railway account (sign up at railway.app)
-- [ ] Supabase project
-- [ ] API keys for services you want to use
+The MCP runs locally via stdio when Claude Code starts. This is the default and recommended setup.
 
-## Step 1: Deploy to Railway
+### Prerequisites
 
-### Option A: Deploy from GitHub (Recommended)
+- Node.js 20+
+- npm
+- Supabase project (for database)
+- API keys for services you want to use
 
-1. Go to [railway.app](https://railway.app)
-2. Click "New Project"
-3. Select "Deploy from GitHub repo"
-4. Choose `mrchevyceleb/assistant-mcp`
-5. Railway will auto-detect the configuration from `railway.json`
+### Setup Steps
 
-### Option B: Railway CLI
+#### 1. Install Dependencies
 
 ```bash
-# Install Railway CLI
-npm i -g @railway/cli
-
-# Login
-railway login
-
-# Link to project
-cd assistant-mcp
-railway link
-
-# Deploy
-railway up
-```
-
-## Step 2: Configure Environment Variables
-
-In Railway dashboard, go to Variables and add:
-
-### Required Variables
-
-```bash
-# Server
-PORT=9001
-NODE_ENV=production
-MCP_AUTH_TOKEN=mcp_live_$(openssl rand -hex 32)
-
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_service_role_key_here
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-
-# API Keys (optional - can be stored in Supabase later)
-BRAVE_SEARCH_API_KEY=your_key
-PERPLEXITY_API_KEY=your_key
-GEMINI_API_KEY=your_key
-GITHUB_TOKEN=ghp_your_token
-VERCEL_TOKEN=your_token
-```
-
-### Generate Tokens
-
-```bash
-# Generate MCP auth token
-openssl rand -hex 32
-
-# Generate encryption key
-openssl rand -hex 32
-```
-
-Copy these values to Railway environment variables.
-
-## Step 3: Run Supabase Migrations
-
-### Option A: Supabase Dashboard
-
-1. Go to your Supabase project
-2. Click "SQL Editor"
-3. Copy contents of `supabase/migrations/001_initial_schema.sql`
-4. Paste and run
-
-### Option B: Supabase CLI
-
-```bash
-cd assistant-mcp
-supabase link --project-ref your-project-ref
-supabase db push
-```
-
-## Step 4: Store API Credentials
-
-### Option A: Use Setup Script
-
-```bash
-cd server
+cd assistant-mcp/server
 npm install
-cp .env.example .env
-
-# Edit .env with your values
-# Then run:
-npm run setup-credentials
 ```
 
-### Option B: Manual via Supabase
+#### 2. Configure .mcp.json
 
-Insert directly into the `credentials` table with encrypted values.
-
-## Step 5: Test Deployment
-
-```bash
-# Check health endpoint
-curl https://your-app.up.railway.app/health
-
-# Expected response:
-# {
-#   "status": "healthy",
-#   "timestamp": "2026-01-20T...",
-#   "uptime": 123.45
-# }
-```
-
-## Step 6: Configure Claude Code
-
-### Update `.mcp.json`
-
-**Location:** `C:\Users\mtjoh\OneDrive\Documents\ASSISTANT-HUB\Assistant\.mcp.json`
+Edit the project's `.mcp.json` file:
 
 ```json
 {
   "mcpServers": {
     "assistant-mcp": {
-      "command": "npm",
-      "args": ["start"],
+      "command": "npx",
+      "args": ["tsx", "src/index.ts"],
       "cwd": "./assistant-mcp/server",
       "env": {
         "SUPABASE_URL": "https://your-project.supabase.co",
-        "SUPABASE_SERVICE_KEY": "your_service_key",
-        "ENCRYPTION_KEY": "your_32_char_key",
-        "MCP_AUTH_TOKEN": "mcp_live_your_token",
-        "NODE_ENV": "production"
+        "SUPABASE_SERVICE_KEY": "your-service-role-key",
+        "ENCRYPTION_KEY": "your-32-byte-hex-key",
+        "MCP_AUTH_TOKEN": "mcp_live_your-random-token",
+        "NODE_ENV": "production",
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/gcp-oauth.keys.json"
       }
-    },
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
     }
   }
 }
 ```
 
-**Note:** The `npm start` command auto-rebuilds TypeScript before running, ensuring fresh code on every OpenCode restart.
+Generate keys:
+```bash
+# Encryption key (32 bytes hex)
+openssl rand -hex 32
 
-### Enable in `~/.claude.json`
+# Auth token
+echo "mcp_live_$(openssl rand -hex 32)"
+```
 
-Edit `C:\Users\mtjoh\.claude.json` and find the Assistant project entry. Add `"assistant-mcp"` to the `enabledMcpjsonServers` array:
+#### 3. Enable in Claude Code
+
+Edit `~/.claude.json`:
 
 ```json
-"projects": {
-  "C:/Users/mtjoh/OneDrive/Documents/ASSISTANT-HUB/Assistant": {
-    "enabledMcpjsonServers": ["assistant-mcp", "playwright"],
-    "hasTrustDialogAccepted": true
+{
+  "projects": {
+    "/path/to/your/project": {
+      "enabledMcpjsonServers": ["assistant-mcp"],
+      "hasTrustDialogAccepted": true
+    }
   }
 }
 ```
 
-## Step 7: Build the Server
+#### 4. Setup Supabase Tables
+
+Run this SQL in your Supabase SQL Editor:
+
+```sql
+-- Tasks
+CREATE TABLE IF NOT EXISTS tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'not_started',
+  priority TEXT DEFAULT 'medium',
+  project TEXT,
+  due_date DATE,
+  notes TEXT,
+  checklist JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+-- Memory
+CREATE TABLE IF NOT EXISTS memory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  category TEXT,
+  project TEXT,
+  tags TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Credentials (encrypted)
+CREATE TABLE IF NOT EXISTS credentials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service TEXT NOT NULL UNIQUE,
+  encrypted_data TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- OAuth tokens
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service TEXT NOT NULL,
+  account TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  expires_at TIMESTAMPTZ,
+  scopes TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(service, account)
+);
+
+-- Tool usage analytics
+CREATE TABLE IF NOT EXISTS tool_usage (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tool_name TEXT NOT NULL,
+  category TEXT,
+  success BOOLEAN DEFAULT TRUE,
+  execution_time_ms INTEGER,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_memory_category ON memory(category);
+CREATE INDEX IF NOT EXISTS idx_tool_usage_created ON tool_usage(created_at);
+```
+
+#### 5. Store API Credentials
+
+Create a script or run in Node REPL:
+
+```typescript
+import { storeCredential } from './src/lib/encryption.js';
+
+// Store each credential
+await storeCredential('brave_search', 'your-brave-api-key');
+await storeCredential('perplexity', 'your-perplexity-key');
+await storeCredential('gemini', 'your-gemini-key');
+await storeCredential('github', 'ghp_your-github-token');
+await storeCredential('vercel', 'your-vercel-token');
+await storeCredential('hubspot', 'your-hubspot-key');
+await storeCredential('monday', 'your-monday-token');
+await storeCredential('n8n', 'your-n8n-key');
+```
+
+#### 6. Start Claude Code
 
 ```bash
-cd assistant-mcp/server
-npm install
-npm run build
+claude
 ```
 
-## Step 8: Restart Claude Code
-
-Restart Claude Code to load the new MCP server.
-
-## Step 9: Test Tools
-
-Within Claude Code, test the tools:
-
+The MCP starts automatically. Verify with:
 ```
-/mcp                    # List available MCPs (should see "matt")
-list_capabilities       # See all tools
-server_status          # Check health
-list_tasks             # Test task tools
-search_memory          # Test memory tools
+/mcp
 ```
 
-## Step 10: Migrate Data (Optional)
+#### 7. Test Tools
 
-### Migrate Tasks
-
-```bash
-cd assistant-mcp/server
-export TASKS_DIR="../../01-Active/tasks"
-npm run migrate-tasks
+```
+server_status
+list_capabilities
 ```
 
-### Migrate Memory
+---
 
-Edit `scripts/migrate-memory.ts` with actual memory data, then:
+## Multi-Computer Setup
 
-```bash
-npm run migrate-memory
-```
+The assistant-mcp folder syncs via OneDrive across computers.
+
+### What Syncs Automatically
+- All source code
+- `.mcp.json` configuration
+- Documentation
+
+### Per-Machine Setup Required
+
+1. **Install dependencies:**
+   ```bash
+   cd assistant-mcp/server
+   npm install
+   ```
+
+2. **Enable in `~/.claude.json`:**
+   Add `"assistant-mcp"` to `enabledMcpjsonServers` array
+
+3. **OAuth setup (Calendar):**
+   Run the OAuth flow once per machine for Google Calendar
+
+---
+
+## Remote Deployment (Optional)
+
+For a centralized server that all computers connect to:
+
+### Railway Deployment
+
+1. Push code to GitHub
+2. Create new project on Railway
+3. Connect to your repo
+4. Set environment variables in Railway dashboard
+5. Update `.mcp.json` to use HTTP transport instead of stdio
+
+This is more complex and not recommended unless you have specific needs.
+
+---
 
 ## Troubleshooting
 
-### Server won't start
+### MCP not loading
 
-Check Railway logs:
-```bash
-railway logs
-```
-
-Common issues:
-- Missing environment variables
-- Supabase connection failed
-- Build errors
-
-### MCP not loading in OpenCode
-
-1. Check `~/.claude.json` has `"assistant-mcp"` in `enabledMcpjsonServers`
-2. Restart OpenCode completely
-3. Check server build: `cd assistant-mcp/server && npm run build`
-4. Check server can start: `npm start` (should see "MCP server started")
-
-### Code changes not taking effect
-
-Node.js caches ESM modules. After editing source files:
-1. The `npm start` script auto-rebuilds
-2. **You MUST restart OpenCode** - the running process keeps old code in memory
+1. Check `.mcp.json` is valid JSON
+2. Verify `enabledMcpjsonServers` includes `"assistant-mcp"`
+3. Check Node.js version: `node --version` (need 20+)
+4. Look for errors: `npm run build` in server directory
 
 ### Tools not working
 
-1. Check `server_status` tool output
-2. Verify API credentials are stored
-3. Check Railway logs for errors
-4. Verify Supabase tables exist
+1. Run `server_status` to check health
+2. Verify credentials are stored
+3. Check Supabase connection
 
-### Cross-machine sync issues
+### Code changes not taking effect
 
-Remember:
-- `.mcp.json` syncs via OneDrive ✅
-- `~/.claude.json` does NOT sync ❌ (must enable "matt" on each machine)
-- Server code syncs via git ✅
+1. Restart Claude Code completely
+2. The tsx runtime should pick up changes automatically
+3. If still broken, check for TypeScript errors: `npm run build`
 
-## Next Steps
+### Port conflicts
 
-- [ ] Deploy to Railway
-- [ ] Run Supabase migrations
-- [ ] Configure environment variables
-- [ ] Build server locally
-- [ ] Configure Claude Code
-- [ ] Test all tools
-- [ ] Migrate existing data
-- [ ] Test on second computer
-- [ ] Weekend 2: Add OAuth tools (Gmail, Calendar)
+The HTTP admin server uses port 9001. If that's in use:
+- Another instance might be running
+- Kill it: `pkill -f "tsx src/index.ts"`
+- Or change `BASE_PORT` in `src/index.ts`
