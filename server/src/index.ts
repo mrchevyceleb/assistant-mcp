@@ -63,17 +63,23 @@ async function loadTools() {
       const imported = await import(module.path);
       const toolsKey = `${module.name}Tools`;
       if (imported[toolsKey]) {
+        const toolNames = Object.keys(imported[toolsKey]);
         allTools = { ...allTools, ...imported[toolsKey] };
-        logger.info(`Loaded ${Object.keys(imported[toolsKey]).length} tools from ${module.name}`);
+        logger.info(`Loaded ${toolNames.length} tools from ${module.name}: ${toolNames.join(', ')}`);
+      } else {
+        logger.warn(`Module ${module.name} loaded but no ${toolsKey} export found`);
       }
     } catch (error: any) {
       // Degraded mode: Skip failed tools but continue
-      logger.warn(`Failed to load ${module.name} tools:`, error.message);
-      logger.debug(`Stack trace for ${module.name}:`, error.stack);
+      logger.error(`FAILED to load ${module.name} tools: ${error.message}`);
+      logger.error(`Stack trace for ${module.name}:`, error.stack);
     }
   }
 
-  logger.info(`Total tools loaded: ${Object.keys(allTools).length}`);
+  // Log all loaded tool names for verification
+  const allToolNames = Object.keys(allTools);
+  logger.info(`Total tools loaded: ${allToolNames.length}`);
+  logger.info(`All tools: ${allToolNames.join(', ')}`);
   
   if (Object.keys(allTools).length === 0) {
     logger.error('CRITICAL: No tools loaded - MCP server cannot function');
@@ -343,6 +349,16 @@ async function main() {
     // Step 3: Load tools (critical - must succeed)
     logger.info('Loading tools...');
     await loadTools();
+
+    // Step 3.5: Verify critical tools are loaded
+    const criticalTools = ['generate_image', 'edit_image', 'web_search', 'save_memory', 'list_capabilities'];
+    const missingCritical = criticalTools.filter(t => !allTools[t]);
+    if (missingCritical.length > 0) {
+      logger.error(`CRITICAL TOOLS MISSING: ${missingCritical.join(', ')}`);
+      logger.error('This indicates a module loading failure. Check tool exports.');
+    } else {
+      logger.info(`✓ All critical tools verified: ${criticalTools.join(', ')}`);
+    }
 
     // Step 4: Start MCP server on stdio FIRST (critical for OpenCode to detect tools)
     const transport = new StdioServerTransport();
