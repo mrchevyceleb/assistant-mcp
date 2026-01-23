@@ -44,20 +44,60 @@ function validateEnvironment() {
 // Import tools with error handling
 let allTools: Record<string, any> = {};
 
-async function loadTools() {
-  const toolModules = [
-    { name: 'meta', path: './tools/meta.js' },
-    { name: 'tasks', path: './tools/tasks.js' },
-    { name: 'memory', path: './tools/memory.js' },
-    { name: 'search', path: './tools/search.js' },
-    { name: 'images', path: './tools/images.js' },
-    { name: 'github', path: './tools/github.js' },
-    { name: 'vercel', path: './tools/vercel.js' },
-    { name: 'hubspot', path: './tools/hubspot.js' },
-    { name: 'n8n', path: './tools/n8n.js' },
-    { name: 'calendar', path: './tools/calendar.js' },
-  ];
+// Tool module registry for hot-reloading
+const toolModules = [
+  { name: 'meta', path: './tools/meta.js' },
+  { name: 'tasks', path: './tools/tasks.js' },
+  { name: 'memory', path: './tools/memory.js' },
+  { name: 'search', path: './tools/search.js' },
+  { name: 'images', path: './tools/images.js' },
+  { name: 'github', path: './tools/github.js' },
+  { name: 'vercel', path: './tools/vercel.js' },
+  { name: 'hubspot', path: './tools/hubspot.js' },
+  { name: 'n8n', path: './tools/n8n.js' },
+  { name: 'calendar', path: './tools/calendar.js' },
+];
 
+async function loadTools(forceReload = false) {
+  // If force reloading, clear the require cache for tool modules
+  if (forceReload) {
+    logger.info('Force reloading tools - clearing module cache...');
+    allTools = {}; // Clear existing tools
+    
+    // Clear Node.js module cache for tool files
+    // This is the key to hot-reloading - we need to bust the cache
+    const { fileURLToPath } = await import('url');
+    const { dirname, resolve } = await import('path');
+    
+    // For ESM, we append a query string to bust the cache
+    const timestamp = Date.now();
+    
+    for (const module of toolModules) {
+      try {
+        // Dynamic import with cache-busting query string
+        const modulePath = `${module.path}?update=${timestamp}`;
+        const imported = await import(modulePath);
+        
+        const toolsKeyPlural = `${module.name}Tools`;
+        const toolsKeySingular = `${module.name.replace(/s$/, '')}Tools`;
+        
+        const tools = imported[toolsKeyPlural] || imported[toolsKeySingular];
+        
+        if (tools) {
+          const toolNames = Object.keys(tools);
+          allTools = { ...allTools, ...tools };
+          logger.info(`Reloaded ${toolNames.length} tools from ${module.name}: ${toolNames.join(', ')}`);
+        }
+      } catch (error: any) {
+        logger.error(`FAILED to reload ${module.name} tools: ${error.message}`);
+      }
+    }
+    
+    logger.info(`Hot-reload complete. Total tools: ${Object.keys(allTools).length}`);
+    return;
+  }
+
+  // Normal initial load
   for (const module of toolModules) {
     try {
       const imported = await import(module.path);
@@ -285,6 +325,48 @@ app.get('/api/status', authMiddleware, (req, res) => {
     tools_count: Object.keys(allTools).length,
     database: supabaseReady ? 'connected' : 'degraded',
   });
+});
+
+// Reload endpoint - rebuilds and reloads all tools
+app.post('/reload', authMiddleware, async (req, res) => {
+  try {
+    logger.info('Reload request received - rebuilding tools...');
+    
+    // Run tsc to rebuild
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    try {
+      logger.info('Running TypeScript compiler...');
+      const { stdout, stderr } = await execAsync('npm run build', { 
+        cwd: process.cwd(),
+        timeout: 30000 
+      });
+      if (stdout) logger.info(`Build output: ${stdout}`);
+      if (stderr) logger.warn(`Build stderr: ${stderr}`);
+    } catch (buildError: any) {
+      logger.error('Build failed:', buildError.message);
+      return res.status(500).json({ 
+        error: 'Build failed', 
+        details: buildError.message,
+        stderr: buildError.stderr 
+      });
+    }
+    
+    // Reload tools with cache busting
+    await loadTools(true);
+    
+    res.json({ 
+      success: true, 
+      message: 'Tools rebuilt and reloaded',
+      tools_count: Object.keys(allTools).length,
+      tools: Object.keys(allTools)
+    });
+  } catch (error: any) {
+    logger.error('Reload failed:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Admin API routes

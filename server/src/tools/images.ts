@@ -16,7 +16,12 @@ export const imageTools = {
     handler: async ({ prompt, aspect_ratio = '1:1' }: any) => {
       const apiKey = await getCredential('gemini');
 
-      // Gemini 3 uses generateContent endpoint with image generation config
+      // Add aspect ratio to prompt for better results
+      const aspectPrompt = aspect_ratio !== '1:1' 
+        ? `${prompt}. Create this image in ${aspect_ratio} aspect ratio (wide landscape format).`
+        : prompt;
+
+      // Gemini 3 Pro uses generateContent endpoint
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
         {
@@ -29,16 +34,13 @@ export const imageTools = {
               {
                 parts: [
                   {
-                    text: prompt,
+                    text: aspectPrompt,
                   },
                 ],
               },
             ],
             generationConfig: {
-              responseModalities: ['IMAGE', 'TEXT'],
-              imageGenerationConfig: {
-                aspectRatio: aspect_ratio,
-              },
+              responseModalities: ['TEXT', 'IMAGE'],
             },
           }),
         }

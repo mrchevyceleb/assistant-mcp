@@ -11,9 +11,11 @@ To add a new integration (e.g., Notion):
 1. Create tool file: `assistant-mcp/server/src/tools/notion.ts`
 2. Add import to: `assistant-mcp/server/src/index.ts`
 3. Store API key in Supabase using the store-credentials script
-4. Rebuild: `npm run build`
+4. **Restart OpenCode** (auto-rebuilds on start via `npm start`)
 
 That's it. ~5 minutes per integration.
+
+**Important:** You MUST restart OpenCode after code changes. Node.js caches modules in memory, so the running MCP process won't see changes until restarted.
 
 ---
 

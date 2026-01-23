@@ -448,7 +448,7 @@ For true cross-computer access without running locally:
 | **Tasks** | 8 | list, get, create, update, complete, delete, urgent, process_inbox |
 | **Memory** | 4 | save, search, recent, delete |
 | **Search** | 3 | web_search, deep_research, quick_search |
-| **Images** | 2 | generate_image, edit_image |
+| **Images** | 2 | generate_image, edit_image (uses `gemini-3-pro-image-preview`) |
 | **GitHub** | 4 | create_issue, create_pr, search_code, list_repos |
 | **Deploy** | 3 | deploy_site, list_deployments, get_deployment_url |
 | **Email** | 6 | Coming soon (OAuth) |
@@ -486,14 +486,27 @@ cat cli/.env
 2. Check browser console for errors
 3. Verify server is running: `curl http://localhost:9001/health`
 
-### MCP not appearing in Claude Code
+### MCP not appearing in OpenCode
 
 1. Check `.mcp.json` has correct syntax
 2. Verify `~/.claude.json` has MCP enabled:
    ```json
    "enabledMcpjsonServers": ["assistant-mcp"]
    ```
-3. Restart Claude Code after config changes
+3. Restart OpenCode after config changes
+
+### Code changes not taking effect
+
+**This is the #1 issue!** Node.js caches ESM modules in memory.
+
+1. Make sure you rebuilt: `cd server && npm run build`
+2. **Restart OpenCode completely** - not just a new conversation, fully quit and reopen
+3. The MCP server will auto-rebuild on start (`npm start` runs `tsc` first)
+
+If changes still don't work:
+- Check `server/dist/tools/*.js` to verify your changes compiled
+- Look for TypeScript errors during build
+- Check the MCP server logs for loading errors
 
 ### Database connection errors
 
@@ -518,7 +531,33 @@ The project uses Tailwind CSS v4. Ensure:
 2. Register with `registerTool(name, category, description, schema)`
 3. Import in `server/src/index.ts`
 4. Add to `allTools` object
-5. Rebuild and redeploy
+5. Rebuild and restart OpenCode (see below)
+
+### After Making Code Changes
+
+**IMPORTANT:** Node.js caches ESM modules in memory. After editing any source files:
+
+1. The `npm start` command **auto-rebuilds** before running (runs `tsc` first)
+2. **You MUST restart OpenCode** for changes to take effect
+
+**Why?** The MCP server process stays running while OpenCode is open. Even if you rebuild the TypeScript files, the running Node.js process keeps the old JavaScript modules in memory. Restarting OpenCode kills and restarts the MCP process, loading fresh code.
+
+**Quick workflow:**
+```bash
+# Option 1: Just restart OpenCode (auto-rebuilds on start)
+
+# Option 2: Rebuild manually first, then restart OpenCode
+cd assistant-mcp/server
+npm run build
+# Then restart OpenCode
+
+# Option 3: Use the helper script (Windows)
+cd assistant-mcp
+.\rebuild.ps1
+# Then restart OpenCode
+```
+
+**If you skip restarting OpenCode**, the MCP will use stale cached code and your changes won't work!
 
 ### Running Tests
 

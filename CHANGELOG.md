@@ -1,5 +1,35 @@
 # Assistant MCP Changelog
 
+## January 23, 2026 - Auto-Rebuild & Image Generation Fix
+
+### Changes
+
+**1. Auto-Rebuild on Start**
+- `npm start` now runs `npm run build && node dist/index.js`
+- Ensures fresh TypeScript compilation every time the MCP starts
+- No more stale cached code issues
+
+**2. Image Generation Fixed**
+- Model: `gemini-3-pro-image-preview` (this is the correct model)
+- Removed invalid `imageGenerationConfig` from API request
+- Aspect ratio now added to prompt text instead
+
+**3. Added Helper Script**
+- `rebuild.ps1` - Quick rebuild with restart instructions
+
+**4. Documentation Cleanup**
+- Deleted redundant docs: `BULLETPROOF-*.md`, `SYNC-INSTRUCTIONS.md`, `SETUP-CHECKLIST.md`, `TEST-STATUS.md`
+- Updated `README.md` with code change workflow
+- All setup info now consolidated in `README.md`
+
+### Important: Code Changes Require OpenCode Restart
+
+Node.js caches ESM modules in memory. After editing assistant-mcp source:
+1. `npm start` auto-rebuilds on next start
+2. **You must restart OpenCode** - the running process keeps old code
+
+---
+
 ## January 21, 2026 - Calendar Integration & Port Update
 
 ### ✅ Major Changes

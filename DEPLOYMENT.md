@@ -131,14 +131,16 @@ curl https://your-app.up.railway.app/health
 ```json
 {
   "mcpServers": {
-    "matt": {
-      "command": "node",
-      "args": ["C:/Users/mtjoh/OneDrive/Documents/ASSISTANT-HUB/Assistant/assistant-mcp/server/dist/index.js"],
+    "assistant-mcp": {
+      "command": "npm",
+      "args": ["start"],
+      "cwd": "./assistant-mcp/server",
       "env": {
         "SUPABASE_URL": "https://your-project.supabase.co",
         "SUPABASE_SERVICE_KEY": "your_service_key",
         "ENCRYPTION_KEY": "your_32_char_key",
-        "MCP_AUTH_TOKEN": "mcp_live_your_token"
+        "MCP_AUTH_TOKEN": "mcp_live_your_token",
+        "NODE_ENV": "production"
       }
     },
     "playwright": {
@@ -149,16 +151,16 @@ curl https://your-app.up.railway.app/health
 }
 ```
 
-**Note:** For now, we're running the server locally (not via Railway). This avoids network latency and simplifies the setup. The server reads from the local Supabase database.
+**Note:** The `npm start` command auto-rebuilds TypeScript before running, ensuring fresh code on every OpenCode restart.
 
 ### Enable in `~/.claude.json`
 
-Edit `C:\Users\mtjoh\.claude.json` and find the Assistant project entry. Add `"matt"` to the `enabledMcpjsonServers` array:
+Edit `C:\Users\mtjoh\.claude.json` and find the Assistant project entry. Add `"assistant-mcp"` to the `enabledMcpjsonServers` array:
 
 ```json
 "projects": {
   "C:/Users/mtjoh/OneDrive/Documents/ASSISTANT-HUB/Assistant": {
-    "enabledMcpjsonServers": ["matt", "playwright"],
+    "enabledMcpjsonServers": ["assistant-mcp", "playwright"],
     "hasTrustDialogAccepted": true
   }
 }
@@ -220,12 +222,18 @@ Common issues:
 - Supabase connection failed
 - Build errors
 
-### MCP not loading in Claude Code
+### MCP not loading in OpenCode
 
-1. Check `~/.claude.json` has `"matt"` in `enabledMcpjsonServers`
-2. Restart Claude Code
+1. Check `~/.claude.json` has `"assistant-mcp"` in `enabledMcpjsonServers`
+2. Restart OpenCode completely
 3. Check server build: `cd assistant-mcp/server && npm run build`
-4. Check server can start: `node dist/index.js` (should see "MCP server started")
+4. Check server can start: `npm start` (should see "MCP server started")
+
+### Code changes not taking effect
+
+Node.js caches ESM modules. After editing source files:
+1. The `npm start` script auto-rebuilds
+2. **You MUST restart OpenCode** - the running process keeps old code in memory
 
 ### Tools not working
 
