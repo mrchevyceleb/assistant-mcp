@@ -25,7 +25,7 @@ const TOKEN_PATH = path.join(os.homedir(), '.config', 'google-calendar-mcp', 'to
 const CREDENTIALS_PATH = process.env.GOOGLE_OAUTH_CREDENTIALS || '';
 
 async function getAuthClient(): Promise<OAuth2Client> {
-  if (oauth2Client) return oauth2Client;
+  if (oauth2Client && calendar) return oauth2Client;
 
   try {
     // Load credentials
@@ -35,13 +35,45 @@ async function getAuthClient(): Promise<OAuth2Client> {
     oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
 
     // Load tokens
-    const tokens = JSON.parse(await fs.readFile(TOKEN_PATH, 'utf-8'));
-    oauth2Client.setCredentials(tokens.normal);
+    const tokenData = JSON.parse(await fs.readFile(TOKEN_PATH, 'utf-8'));
+    const tokens = tokenData.normal || tokenData;
+    
+    oauth2Client.setCredentials(tokens);
+
+    // Set up automatic token refresh
+    oauth2Client.on('tokens', async (newTokens) => {
+      try {
+        const existingData = JSON.parse(await fs.readFile(TOKEN_PATH, 'utf-8'));
+        const updatedTokens = {
+          ...existingData,
+          normal: {
+            ...(existingData.normal || {}),
+            ...newTokens,
+          }
+        };
+        await fs.writeFile(TOKEN_PATH, JSON.stringify(updatedTokens, null, 2));
+        console.log('Calendar tokens refreshed and saved');
+      } catch (e) {
+        console.error('Failed to save refreshed tokens:', e);
+      }
+    });
+
+    // Force token refresh if expired
+    const expiryDate = tokens.expiry_date;
+    if (expiryDate && expiryDate < Date.now()) {
+      console.log('Calendar token expired, refreshing...');
+      const { credentials: refreshedCreds } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(refreshedCreds);
+    }
 
     calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     return oauth2Client;
   } catch (error: any) {
+    console.error('Calendar auth error details:', error);
+    if (error.message?.includes('unauthorized_client')) {
+      throw new Error(`Calendar OAuth token expired or revoked. Re-run calendar authorization to get a fresh token. Original error: ${error.message}`);
+    }
     throw new Error(`Calendar authentication failed: ${error.message}`);
   }
 }
