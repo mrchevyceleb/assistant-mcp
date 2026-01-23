@@ -61,13 +61,19 @@ async function loadTools() {
   for (const module of toolModules) {
     try {
       const imported = await import(module.path);
-      const toolsKey = `${module.name}Tools`;
-      if (imported[toolsKey]) {
-        const toolNames = Object.keys(imported[toolsKey]);
-        allTools = { ...allTools, ...imported[toolsKey] };
+      // Try both naming conventions: imagesTools and imageTools (singular)
+      const toolsKeyPlural = `${module.name}Tools`;
+      const toolsKeySingular = `${module.name.replace(/s$/, '')}Tools`;
+      
+      const tools = imported[toolsKeyPlural] || imported[toolsKeySingular];
+      
+      if (tools) {
+        const toolNames = Object.keys(tools);
+        allTools = { ...allTools, ...tools };
         logger.info(`Loaded ${toolNames.length} tools from ${module.name}: ${toolNames.join(', ')}`);
       } else {
-        logger.warn(`Module ${module.name} loaded but no ${toolsKey} export found`);
+        logger.warn(`Module ${module.name} loaded but no ${toolsKeyPlural} or ${toolsKeySingular} export found`);
+        logger.warn(`Available exports: ${Object.keys(imported).join(', ')}`);
       }
     } catch (error: any) {
       // Degraded mode: Skip failed tools but continue
