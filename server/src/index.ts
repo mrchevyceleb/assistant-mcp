@@ -56,6 +56,7 @@ const toolModules = [
   { name: 'hubspot', path: './tools/hubspot.js' },
   { name: 'n8n', path: './tools/n8n.js' },
   { name: 'calendar', path: './tools/calendar.js' },
+  { name: 'monday', path: './tools/monday.js' },
 ];
 
 async function loadTools(forceReload = false) {
