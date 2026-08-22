@@ -57,6 +57,7 @@ const toolModules = [
   { name: 'n8n', path: './tools/n8n.js' },
   { name: 'calendar', path: './tools/calendar.js' },
   { name: 'monday', path: './tools/monday.js' },
+  { name: 'gmail', path: './tools/gmail.js' },
 ];
 
 async function loadTools(forceReload = false) {
