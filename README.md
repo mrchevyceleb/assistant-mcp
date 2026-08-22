@@ -63,7 +63,7 @@ Claude Code ──► stdio ──► assistant-mcp ──► Supabase (State)
                                └── Google Calendar API
 ```
 
-## Tool Categories (71 total)
+## Tool Categories (83 total)
 
 | Category | Count | Tools |
 |----------|-------|-------|
@@ -78,6 +78,7 @@ Claude Code ──► stdio ──► assistant-mcp ──► Supabase (State)
 | **Monday.com** | 14 | `monday_list_boards`, `monday_get_board`, `monday_list_items`, `monday_get_item`, `monday_create_item`, `monday_update_item`, `monday_create_update`, `monday_move_item`, `monday_archive_item`, `monday_delete_item`, `monday_search_items`, `monday_get_groups`, `monday_create_group` |
 | **n8n** | 14 | `n8n_list_workflows`, `n8n_get_workflow`, `n8n_activate_workflow`, `n8n_execute_workflow`, `n8n_list_executions`, `n8n_get_execution`, `n8n_create_workflow`, `n8n_update_workflow`, `n8n_add_node`, `n8n_update_node`, `n8n_remove_node`, `n8n_delete_workflow`, `n8n_duplicate_workflow` |
 | **Calendar** | 7 | `list_calendars`, `list_events`, `create_event`, `get_event`, `update_event`, `delete_event`, `get_freebusy` |
+| **Gmail** | 12 | `gmail_send`, `gmail_reply`, `gmail_get_messages`, `gmail_get_message`, `gmail_search`, `gmail_archive`, `gmail_archive_batch`, `gmail_summary`, `gmail_list_accounts`, `gmail_add_account`, `gmail_complete_auth`, `gmail_remove_account`, `gmail_list_sendas` |
 
 ## Credentials
 
@@ -94,7 +95,9 @@ API keys are stored encrypted in Supabase. Current credentials:
 | Monday.com | `monday` | All `monday_*` tools |
 | n8n | `n8n` | All `n8n_*` tools |
 
-Google Calendar uses OAuth (token stored in Supabase `oauth_tokens` table).
+Google Calendar uses OAuth (token stored in `~/.config/google-calendar-mcp/tokens.json`).
+
+Gmail uses OAuth (tokens stored in `~/.config/gmail-mcp/accounts.json`). Supports multiple accounts with send-as aliases.
 
 ## Development
 
@@ -116,7 +119,8 @@ assistant-mcp/
 │   │   │   ├── hubspot.ts    # HubSpot CRM
 │   │   │   ├── monday.ts     # Monday.com boards
 │   │   │   ├── n8n.ts        # n8n workflows
-│   │   │   └── calendar.ts   # Google Calendar
+│   │   │   ├── calendar.ts   # Google Calendar
+│   │   │   └── gmail.ts      # Gmail with send-as support
 │   │   ├── lib/
 │   │   │   ├── encryption.ts # Credential storage/retrieval
 │   │   │   ├── supabase.ts   # Database client
